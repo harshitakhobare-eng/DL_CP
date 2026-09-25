@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MathTutor AI — Handwritten Math Understanding & Personalized Learning</title>
+
+  <!-- Lora (serif headings) + DM Sans (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Mermaid -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark">∑</div>
+        <div>
+          <div class="brand-name">MathTutor AI</div>
+          <div class="brand-sub">Handwritten Expression Understanding &amp; Personalized Learning</div>
+        </div>
+      </div>
+
+      <nav class="main-nav">
+        <button class="nav-item active" data-tab="solve">
+          <span class="nav-icon">⊕</span> Solve
+        </button>
+        <button class="nav-item" data-tab="verify">
+          <span class="nav-icon">✓</span> Check Solution
+        </button>
+        <button class="nav-item" data-tab="explain">
+          <span class="nav-icon">◎</span> Explain Mistake
+        </button>
+        <button class="nav-item" data-tab="history">
+          <span class="nav-icon">⊞</span> History
+        </button>
+        <button class="nav-item" data-tab="practice">
+          <span class="nav-icon">◈</span> Practice
+        </button>
+        <button class="nav-item" data-tab="dashboard">
+          <span class="nav-icon">◉</span> Dashboard
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── PAGE BODY ──────────────────────────────────────────── -->
+  <main class="page-body">
+
+    <!-- ══ TAB 1 · SOLVE ════════════════════════════════════════ -->
+    <section id="tab-solve" class="tab-pane active">
+      <div class="page-cols">
+
+        <!-- Left -->
+        <div class="col-left">
+          <div class="card">
+            <h2 class="card-heading">Upload Handwritten Expression</h2>
+            <p class="card-lead">Drop an image of your handwritten equation, or pick one of the samples below.</p>
+
+            <div id="solve-dropzone" class="dropzone">
+              <div class="dropzone-icon">↑</div>
+              <p>Drag &amp; drop image here</p>
+              <p class="dropzone-sub">or <span class="link-text">browse file</span></p>
+              <input type="file" id="solve-file-input" accept="image/*" style="display:none;">
+            </div>
+
+            <div id="solve-preview-container" style="display:none; margin-top:1.25rem;">
+              <p class="field-label">Preprocessed Input</p>
+              <img id="solve-preview-img" class="preview-img" />
+            </div>
+
+            <div class="section-divider"></div>
+
+            <p class="field-label">Quick Samples</p>
+            <div class="pill-group">
+              <span class="pill" onclick="loadSampleMath('2x + 5 = 15')">2x + 5 = 15</span>
+              <span class="pill" onclick="loadSampleMath('x^2 - 5x + 6 = 0')">x² − 5x + 6 = 0</span>
+              <span class="pill" onclick="loadSampleMath('3(x + 4) = 21')">3(x + 4) = 21</span>
+              <span class="pill" onclick="loadSampleMath(String.raw`\frac{1}{x - 2} = 3`)">1/(x − 2) = 3</span>
+              <span class="pill" onclick="loadSampleMath(String.raw`\sqrt{x + 1} = 4`)">√(x + 1) = 4</span>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <p class="field-label">Recognized LaTeX <span class="muted">(editable)</span></p>
+            <input type="text" id="solve-latex-input" class="text-field" placeholder="e.g.  2x + 5 = 15" />
+
+            <div id="confidence-banner"></div>
+
+            <button id="btn-solve-run" class="btn btn-primary btn-full">Solve Symbolically →</button>
+          </div>
+        </div>
+
+        <!-- Right -->
+        <div class="col-right">
+          <div class="card">
+            <h2 class="card-heading">
+              Mathematical Structure
+              <span id="ast-type-badge" class="tag"></span>
+            </h2>
+            <p class="card-lead">Abstract Syntax Tree of the parsed expression.</p>
+            <div id="mermaid-ast" class="ast-box">
+              <p class="placeholder-text">Input an expression to inspect its AST.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-heading">Step-by-Step Derivation</h2>
+            <p class="card-lead">Deterministic symbolic solution — no shortcuts, no guessing.</p>
+            <div id="solve-result-area">
+              <p class="placeholder-text">Solutions and derivation steps will appear here.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══ TAB 2 · CHECK SOLUTION ════════════════════════════════ -->
+    <section id="tab-verify" class="tab-pane">
+      <div class="page-cols">
+
+        <div class="col-left">
+          <div class="card">
+            <h2 class="card-heading">Upload Solution Steps</h2>
+            <p class="card-lead">Upload an image of your working, or type steps line-by-line below.</p>
+
+            <div id="verify-dropzone" class="dropzone">
+              <div class="dropzone-icon">↑</div>
+              <p>Drag &amp; drop image here</p>
+              <p class="dropzone-sub">or <span class="link-text">browse file</span></p>
+              <input type="file" id="verify-file-input" accept="image/*" style="display:none;">
+            </div>
+
+            <div class="section-divider"></div>
+
+            <p class="field-label">Or type steps — one per line</p>
+            <textarea id="verify-text-steps" class="text-field" rows="5"
+              placeholder="Step 1: 3(x + 4) = 21&#10;Step 2: 3x + 4 = 21&#10;Step 3: 3x = 17"></textarea>
+
+            <p class="field-label" style="margin-top:0.5rem;">Load sample student work</p>
+            <div class="pill-group">
+              <span class="pill" onclick="loadSampleSolution('valid')">✓ Correct working</span>
+              <span class="pill" onclick="loadSampleSolution('dist')">Distribution error</span>
+              <span class="pill" onclick="loadSampleSolution('arith')">Arithmetic error</span>
+              <span class="pill" onclick="loadSampleSolution('trans')">Transposition error</span>
+            </div>
+
+            <button id="btn-verify-run" class="btn btn-primary btn-full" style="margin-top:1.25rem;">Verify My Steps →</button>
+          </div>
+        </div>
+
+        <div class="col-right">
+          <div class="card">
+            <h2 class="card-heading">Verification Report</h2>
+            <p class="card-lead">Each algebraic step is checked for mathematical validity.</p>
+            <div id="verify-results-container">
+              <p class="placeholder-text">Submit a solution to see the step-by-step audit.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══ TAB 3 · EXPLAIN MISTAKE ═══════════════════════════════ -->
+    <section id="tab-explain" class="tab-pane">
+      <div class="single-col">
+        <div class="card">
+          <h2 class="card-heading">Pedagogical Mistake Breakdown</h2>
+          <p class="card-lead">A six-point analysis of what went wrong and how to correct it.</p>
+          <div id="explain-content-area">
+            <p class="placeholder-text">
+              No mistake selected. Verify a solution with an error, or select a past mistake from History.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ TAB 4 · HISTORY ═══════════════════════════════════════ -->
+    <section id="tab-history" class="tab-pane">
+      <div class="single-col">
+        <div class="card">
+          <h2 class="card-heading">Mistake History Log</h2>
+          <p class="card-lead">Every incorrect step is recorded here for review.</p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Topic</th>
+                  <th>Problem</th>
+                  <th>Your Step</th>
+                  <th>Correct Step</th>
+                  <th>Category</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body">
+                <tr>
+                  <td colspan="7" class="table-empty">Loading history…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ TAB 5 · PRACTICE ══════════════════════════════════════ -->
+    <section id="tab-practice" class="tab-pane">
+      <div class="single-col">
+        <div class="card">
+          <div class="practice-header">
+            <div>
+              <h2 class="card-heading" style="margin-bottom:0.15rem;">Targeted Practice</h2>
+              <p class="card-lead" id="practice-subtitle">Problems synthesized around your most frequent error patterns.</p>
+            </div>
+            <div class="practice-controls">
+              <select id="practice-category-select" class="text-field select-field">
+                <option value="">Auto-detect weakness</option>
+                <option value="Distribution Error">Distribution Error</option>
+                <option value="Sign Error">Sign Error</option>
+                <option value="Arithmetic Error">Arithmetic Error</option>
+                <option value="Fraction Error">Fraction Error</option>
+                <option value="Exponent Error">Exponent Error</option>
+              </select>
+              <select id="practice-difficulty-select" class="text-field select-field">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+              <button id="btn-generate-practice" class="btn btn-primary">Generate →</button>
+            </div>
+          </div>
+
+          <div class="section-divider"></div>
+
+          <div id="practice-questions-container">
+            <p class="placeholder-text">Click "Generate" to begin practising your targeted weakness.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ TAB 6 · DASHBOARD ═════════════════════════════════════ -->
+    <section id="tab-dashboard" class="tab-pane">
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Attempts</div>
+          <div class="stat-value" id="dash-total-attempts">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Overall Accuracy</div>
+          <div class="stat-value" id="dash-accuracy">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Recent Accuracy (last 10)</div>
+          <div class="stat-value" id="dash-recent-accuracy">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Learning Streak</div>
+          <div class="stat-value" id="dash-streak">—</div>
+        </div>
+      </div>
+
+      <div class="insight-banner">
+        <span class="insight-icon">💡</span>
+        <div>
+          <strong>Tutor Insight</strong>
+          <span id="dash-recommendation-text"> Keep practising to reveal actionable insights.</span>
+        </div>
+      </div>
+
+      <div class="page-cols">
+        <div class="col-left">
+          <div class="card">
+            <h2 class="card-heading">Mistakes by Category</h2>
+            <canvas id="chart-mistakes" height="220"></canvas>
+          </div>
+        </div>
+        <div class="col-right">
+          <div class="card">
+            <h2 class="card-heading">Topic Mastery</h2>
+            <div id="topic-mastery-list">
+              <p class="placeholder-text">No topic data recorded yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

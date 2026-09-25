@@ -1,0 +1,44 @@
+# System Configuration for Math Expression Understanding and Personalized Learning System
+
+dataset:
+  hf_dataset_name: "deepcopy/MathWriting-human"
+  cache_dir: "data/cache"
+  train_subset: 5000       # None for full dataset; integer for development subset
+  val_subset: 500
+  test_subset: 500
+  batch_size: 16
+  num_workers: 0          # Windows safe default
+
+preprocessing:
+  max_height: 128
+  max_width: 512
+  grayscale: true
+  whitespace_threshold: 245
+  pad_margin: 8
+  normalize_mean: 0.5
+  normalize_std: 0.5
+
+model:
+  encoder_channels: [64, 128, 256, 256]
+  d_model: 256
+  nhead: 4
+  num_decoder_layers: 3
+  dim_feedforward: 512
+  dropout: 0.1
+  max_seq_len: 128
+
+training:
+  epochs: 10
+  lr: 0.0005
+  weight_decay: 0.0001
+  gradient_clip_val: 1.0
+  device: "auto"           # "cuda", "cpu", or "auto"
+  checkpoint_dir: "checkpoints"
+  save_best_only: true
+
+storage:
+  db_path: "data/learning_system.db"
+
+ui:
+  host: "127.0.0.1"
+  port: 8000

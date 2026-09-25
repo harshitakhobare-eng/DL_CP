@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# HuggingFace dataset cache (1.3 GB — do NOT commit)
+data/cache/
+
+# SQLite database (user data — regenerated on first run)
+data/*.db
+
+# Model checkpoints (86 MB — too large for GitHub)
+checkpoints/
+
+# Pytest cache
+.pytest_cache/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
