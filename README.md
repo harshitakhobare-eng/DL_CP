@@ -1,4 +1,4 @@
-```markdown
+
 # 🧮 MathTutor AI: Handwritten Math Solver & Personalized Learning System
 
 An end-to-end AI/ML system that recognizes handwritten math expressions, solves them step-by-step deterministically, audits student solutions, and generates personalized practice problems based on diagnosed weaknesses.
