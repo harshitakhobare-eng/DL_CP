@@ -201,3 +201,5 @@ All 46+ tests across tokenization, preprocessing, model architecture, AST genera
 - **Handwritten Line Segmentation**: Line segmentation currently uses horizontal projection profile analysis. Extremely skewed or overlapping handwritten multi-line work may benefit from 2D stroke grouping or connected-component graph analysis.
 - **Complex Multi-Variable Systems**: Single and two-variable linear and quadratic equations are supported natively; higher-order multi-variable non-linear systems require additional algebraic step heuristics.
 - **Recognition Model Size**: The default CNN-Transformer architecture is optimized for fast local training and CPU inference; scaling to ViT/Swin encoders on full multi-GPU clusters is recommended for production deployments on huge multi-million sample datasets.
+#   D L _ C P  
+ 
