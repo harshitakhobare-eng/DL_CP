@@ -159,25 +159,25 @@ def load_math_dataset(
 
         train_ds = hf_dataset["train"]
         num_train = min(len(train_ds), train_subset) if train_subset else len(train_ds)
-        train_data = [train_ds[i] for i in range(num_train)]
+        train_data = train_ds.select(range(num_train)) if hasattr(train_ds, "select") else [train_ds[i] for i in range(num_train)]
 
         val_key = "val" if "val" in hf_dataset else ("validation" if "validation" in hf_dataset else None)
         if val_key:
             val_ds = hf_dataset[val_key]
             num_val = min(len(val_ds), val_subset) if val_subset else len(val_ds)
-            val_data = [val_ds[i] for i in range(num_val)]
+            val_data = val_ds.select(range(num_val)) if hasattr(val_ds, "select") else [val_ds[i] for i in range(num_val)]
         else:
             split_idx = int(len(train_data) * 0.9)
-            val_data = train_data[split_idx:]
-            train_data = train_data[:split_idx]
+            val_data = train_data.select(range(split_idx, len(train_data))) if hasattr(train_data, "select") else train_data[split_idx:]
+            train_data = train_data.select(range(split_idx)) if hasattr(train_data, "select") else train_data[:split_idx]
 
         test_key = "test" if "test" in hf_dataset else None
         if test_key:
             test_ds = hf_dataset[test_key]
             num_test = min(len(test_ds), test_subset) if test_subset else len(test_ds)
-            test_data = [test_ds[i] for i in range(num_test)]
+            test_data = test_ds.select(range(num_test)) if hasattr(test_ds, "select") else [test_ds[i] for i in range(num_test)]
         else:
-            test_data = val_data[:min(len(val_data), test_subset or 50)]
+            test_data = val_data
 
         logger.info(f"Loaded dataset: {len(train_data)} train, {len(val_data)} val, {len(test_data)} test samples.")
         return train_data, val_data, test_data

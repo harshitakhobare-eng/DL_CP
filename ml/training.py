@@ -219,11 +219,12 @@ class MathTrainer:
                 best_em = metrics["exact_match"]
                 self.save_checkpoint("best_model.pt", epoch, metrics)
 
+            # Always save latest model after each epoch
+            self.save_checkpoint("latest_model.pt", epoch, metrics)
+
             if not save_best_only:
                 self.save_checkpoint(f"checkpoint_epoch_{epoch}.pt", epoch, metrics)
 
-        # Save latest model
-        self.save_checkpoint("latest_model.pt", epochs, metrics)
         logger.info("Training complete.")
         return {
             "best_val_loss": best_val_loss,
