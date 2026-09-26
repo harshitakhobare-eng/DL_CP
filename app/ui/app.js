@@ -123,7 +123,7 @@ async function handleSolveFileUpload(file) {
 
     let bannerHtml = `
       <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.4rem;">
-        <span class="conf-badge ${badgeClass}">Recognition Confidence: ${confPct}%</span>
+        <span class="conf-badge ${badgeClass}">Sequence Confidence: ${confPct}%</span>
       </div>
     `;
 
@@ -131,10 +131,15 @@ async function handleSolveFileUpload(file) {
       const warnings = data.low_confidence_tokens.map(t => t.warning).join(" • ");
       bannerHtml += `
         <div style="font-size:0.8rem; color:var(--warning); margin-top:0.3rem;">
-          ⚠️ <strong>Visual Ambiguity:</strong> ${warnings}. Check the text box before solving.
+        ⚠️ <strong>Uncertain recognition:</strong> ${warnings}. Check the text box before solving.
         </div>
       `;
     }
+    bannerHtml += `
+      <div style="font-size:0.8rem; margin-top:0.3rem;">
+        OCR can be wrong even when its score is high. Review or correct the expression above, then choose “Solve Symbolically”.
+      </div>
+    `;
     confBanner.innerHTML = bannerHtml;
 
     // Render AST if returned
@@ -142,8 +147,8 @@ async function handleSolveFileUpload(file) {
       renderMermaidAST(data.ast_mermaid);
     }
 
-    // Run symbolic solve
-    runSolve(data.latex);
+    // OCR is a hypothesis. Keep it editable and require the user to review it
+    // before sending it to the deterministic solver.
   } catch (err) {
     alert("Error recognizing image: " + err.message);
   } finally {

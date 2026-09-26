@@ -27,6 +27,8 @@ class PositionalEncoding2D(nn.Module):
         if d_model % 4 != 0:
             raise ValueError(f"d_model must be divisible by 4, got {d_model}")
         
+        self.max_h = max_h
+        self.max_w = max_w
         d_sub = d_model // 2
         pe = torch.zeros(max_h, max_w, d_model)
         
@@ -56,8 +58,11 @@ class PositionalEncoding2D(nn.Module):
         Args:
             x: (B, h * w, d_model)
         """
-        # Extract corresponding grid
-        pe_grid = self.pe[:, : h * w, :]
+        # The buffer is stored using max_w as its row stride. Slice the 2D
+        # grid before flattening so widths smaller than max_w (e.g. the
+        # encoder's 32 columns) retain the correct row/column coordinates.
+        pe_grid = self.pe.view(1, self.max_h, self.max_w, self.pe.shape[2])
+        pe_grid = pe_grid[:, :h, :w, :].reshape(1, h * w, self.pe.shape[2])
         return x + pe_grid
 
 
@@ -316,7 +321,10 @@ class MathFormulaRecognitionModel(nn.Module):
             probs = all_token_probs[i]
             
             if len(probs) > 0:
-                overall_conf = float(np.mean(probs))
+                # Geometric mean reflects the likelihood of the whole token
+                # sequence and prevents a few high-confidence tokens from
+                # masking several weak OCR decisions.
+                overall_conf = float(np.exp(np.mean(np.log(np.maximum(probs, 1e-12)))))
             else:
                 overall_conf = 1.0 if len(t_ids) == 0 else 0.0
 

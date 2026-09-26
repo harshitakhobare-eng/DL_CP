@@ -196,7 +196,7 @@ class MathTrainer:
     def train(self, epochs: int = 10, save_best_only: bool = True) -> Dict[str, Any]:
         """Complete training loop across epochs with checkpointing."""
         best_val_loss = float("inf")
-        best_em = 0.0
+        best_em = -1.0
 
         for epoch in range(1, epochs + 1):
             logger.info(f"\n--- Starting Epoch {epoch}/{epochs} ---")
@@ -212,8 +212,13 @@ class MathTrainer:
             }
             self.history.append(epoch_record)
 
-            # Checkpoint condition: best validation loss or best exact match
-            is_best = metrics["val_loss"] < best_val_loss
+            # Exact sequence quality is the goal of OCR. Use validation loss
+            # only to break ties, so a smoother but less accurate decoder
+            # cannot replace the best recognizer checkpoint.
+            is_best = (
+                metrics["exact_match"] > best_em
+                or (metrics["exact_match"] == best_em and metrics["val_loss"] < best_val_loss)
+            )
             if is_best:
                 best_val_loss = metrics["val_loss"]
                 best_em = metrics["exact_match"]

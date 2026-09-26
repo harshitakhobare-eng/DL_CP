@@ -57,6 +57,7 @@ def evaluate_recognition(checkpoint_path: str, test_subset: int = 50, config_pat
         dataset_name=dataset_cfg.get("hf_dataset_name", "deepcopy/MathWriting-human"),
         cache_dir=dataset_cfg.get("cache_dir", "data/cache"),
         test_subset=test_subset,
+        allow_synthetic_fallback=False,
     )
 
     test_ds = MathWritingDataset(

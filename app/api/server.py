@@ -136,6 +136,11 @@ def health_check():
 async def recognize_image(file: UploadFile = File(...)):
     """Upload an image of a handwritten mathematical expression for recognition."""
     try:
+        if recognizer.model is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Handwriting recognition is unavailable because no trained checkpoint is loaded.",
+            )
         contents = await file.read()
         if not contents:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
@@ -165,6 +170,8 @@ async def recognize_image(file: UploadFile = File(...)):
             "ast": ast_dict,
             "ast_mermaid": ast_mermaid,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error during recognition: {e}")
         raise HTTPException(status_code=400, detail=f"Image recognition failed: {str(e)}")
@@ -203,7 +210,10 @@ def solve_expression(req: SolveRequest):
         }
     except Exception as e:
         logger.error(f"Error solving expression '{req.latex}': {e}")
-        raise HTTPException(status_code=400, detail=f"Mathematical solution failed: {str(e)}")
+        raise HTTPException(
+            status_code=422,
+            detail="Could not parse this as a supported math expression. Check the recognized text for OCR mistakes, unmatched braces, or unsupported LaTeX commands.",
+        )
 
 
 @app.post("/api/verify")

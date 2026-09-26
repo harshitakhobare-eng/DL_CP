@@ -130,6 +130,7 @@ def load_math_dataset(
     train_subset: Optional[int] = 5000,
     val_subset: Optional[int] = 500,
     test_subset: Optional[int] = 500,
+    allow_synthetic_fallback: bool = True,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Load the MathWriting-human dataset from Hugging Face.
     
@@ -183,6 +184,13 @@ def load_math_dataset(
         return train_data, val_data, test_data
 
     except Exception as e:
+        if not allow_synthetic_fallback:
+            raise RuntimeError(
+                f"Could not load real handwriting dataset '{dataset_name}'. "
+                "Training/evaluation stopped rather than silently using synthetic typed images. "
+                "Check Hugging Face access/cache, or explicitly enable the synthetic fallback "
+                "for a smoke test only."
+            ) from e
         logger.error(
             "\n" + "=" * 70 + "\n"
             "NOTE ON HUGGING FACE DATASET ACCESS:\n"

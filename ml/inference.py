@@ -41,14 +41,8 @@ class MathRecognizer:
         if checkpoint_path and os.path.exists(checkpoint_path):
             self.load(checkpoint_path)
         else:
-            # Initialize with default architecture
-            logger.info("Initializing MathRecognizer with base architecture (no checkpoint specified).")
-            self.model = MathFormulaRecognitionModel(
-                vocab_size=self.tokenizer.vocab_size,
-                d_model=256,
-                max_seq_len=128,
-            ).to(self.device)
-            self.model.eval()
+            # Never present random, untrained weights as OCR predictions.
+            logger.warning("No recognition checkpoint loaded; image recognition is unavailable.")
 
     def load(self, checkpoint_path: str) -> None:
         """Load model weights and vocabulary from a checkpoint."""
@@ -82,7 +76,10 @@ class MathRecognizer:
                 - preprocessed_base64: Base64-encoded preprocessed image
         """
         if self.model is None:
-            raise RuntimeError("Model is not initialized.")
+            raise RuntimeError(
+                "No trained recognition checkpoint is loaded. Train a model and place "
+                "checkpoints/best_model.pt before recognizing images."
+            )
 
         # Preprocess input image
         tensor, preprocessed_pil = preprocess_image(image_input)

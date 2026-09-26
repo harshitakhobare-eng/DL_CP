@@ -30,6 +30,11 @@ def main():
     parser.add_argument("--train-subset", type=int, default=None, help="Subset size for training")
     parser.add_argument("--val-subset", type=int, default=None, help="Subset size for validation")
     parser.add_argument("--checkpoint-dir", type=str, default=None, help="Checkpoint output directory")
+    parser.add_argument(
+        "--allow-synthetic-data",
+        action="store_true",
+        help="Allow the synthetic typed-expression fallback for smoke tests; unsuitable for handwriting recognition.",
+    )
     args = parser.parse_args()
 
     # Load configuration
@@ -61,7 +66,13 @@ def main():
         train_subset=train_subset,
         val_subset=val_subset,
         test_subset=test_subset,
+        allow_synthetic_fallback=args.allow_synthetic_data,
     )
+
+    if not args.allow_synthetic_data and any(
+        sample.get("data_type") == "synthetic_benchmark" for sample in train_samples
+    ):
+        raise RuntimeError("Synthetic benchmark data cannot be used to train the handwriting recognizer.")
 
     # PyTorch Datasets
     train_ds = MathWritingDataset(
