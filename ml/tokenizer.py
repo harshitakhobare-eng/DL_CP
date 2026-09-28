@@ -182,6 +182,18 @@ class LatexTokenizer:
             return new_id
         return self.token2id[token]
 
+    def extend_from_texts(self, texts) -> int:
+        """Add tokens observed in training text while preserving existing IDs.
+
+        Extending only appends entries, so the standard token IDs remain
+        stable and the resulting vocabulary can be saved in a checkpoint.
+        """
+        initial_size = self.vocab_size
+        for text in texts:
+            for token in self.tokenize(text or ""):
+                self.add_token(token)
+        return self.vocab_size - initial_size
+
     def save(self, filepath: str) -> None:
         """Save vocabulary to a JSON file."""
         os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)

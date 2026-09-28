@@ -102,6 +102,64 @@ class MathTrainer:
 
         self.history: List[Dict[str, Any]] = []
 
+    @staticmethod
+    def initialize_from_checkpoint(
+        model: MathFormulaRecognitionModel,
+        tokenizer: LatexTokenizer,
+        checkpoint_path: str,
+        device: str = "cpu",
+    ) -> int:
+        """Warm-start a model, remapping decoder vocabulary rows by token.
+
+        This supports adding dataset-specific tokens while retaining the
+        vision encoder and all shape-compatible decoder weights. Optimizer
+        state is intentionally not restored because changed vocabulary rows
+        have new parameters.
+        """
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint not found at: {checkpoint_path}")
+
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        old_state = checkpoint["model_state_dict"]
+        old_vocab = checkpoint.get("vocab", {})
+        new_state = model.state_dict()
+        vocab_weight_keys = {
+            "decoder.token_embedding.weight",
+            "decoder.fc_out.weight",
+            "decoder.fc_out.bias",
+        }
+        transferred = 0
+
+        for key, new_tensor in new_state.items():
+            old_tensor = old_state.get(key)
+            if old_tensor is None:
+                continue
+            if old_tensor.shape == new_tensor.shape:
+                new_state[key] = old_tensor
+                transferred += 1
+                continue
+            if key not in vocab_weight_keys or not old_vocab:
+                continue
+
+            remapped = new_tensor.clone()
+            copied_rows = 0
+            for token, old_id in old_vocab.items():
+                new_id = tokenizer.token2id.get(token)
+                if (
+                    new_id is not None
+                    and old_id < old_tensor.shape[0]
+                    and new_id < remapped.shape[0]
+                    and old_tensor.shape[1:] == remapped.shape[1:]
+                ):
+                    remapped[new_id] = old_tensor[old_id]
+                    copied_rows += 1
+            new_state[key] = remapped
+            if copied_rows:
+                transferred += 1
+
+        model.load_state_dict(new_state)
+        return transferred
+
     def train_epoch(self, epoch: int) -> float:
         """Run one training epoch with teacher forcing."""
         self.model.train()
@@ -148,11 +206,17 @@ class MathTrainer:
         
         all_pred_texts: List[str] = []
         all_gt_texts: List[str] = []
+        unknown_tokens = 0
+        total_label_tokens = 0
 
         for batch in self.val_loader:
             images = batch["images"].to(self.device)
             token_ids = batch["token_ids"].to(self.device)
             gt_latex = batch["latex"]
+            for latex in gt_latex:
+                label_tokens = self.tokenizer.tokenize(latex)
+                total_label_tokens += len(label_tokens)
+                unknown_tokens += sum(token not in self.tokenizer.token2id for token in label_tokens)
 
             # Compute validation loss
             tgt_input = token_ids[:, :-1]
@@ -189,6 +253,7 @@ class MathTrainer:
             "token_acc": round(token_acc, 4),
             "exact_match": round(em_rate, 4),
             "cer": round(cer, 4),
+            "unknown_token_rate": round(unknown_tokens / max(1, total_label_tokens), 4),
         }
         logger.info(f"Validation Metrics: {metrics}")
         return metrics

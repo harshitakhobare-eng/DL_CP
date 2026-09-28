@@ -31,6 +31,12 @@ def main():
     parser.add_argument("--val-subset", type=int, default=None, help="Subset size for validation")
     parser.add_argument("--checkpoint-dir", type=str, default=None, help="Checkpoint output directory")
     parser.add_argument(
+        "--init-checkpoint",
+        type=str,
+        default=None,
+        help="Initialize from a checkpoint, copying compatible weights and matching vocabulary rows.",
+    )
+    parser.add_argument(
         "--allow-synthetic-data",
         action="store_true",
         help="Allow the synthetic typed-expression fallback for smoke tests; unsuitable for handwriting recognition.",
@@ -74,6 +80,24 @@ def main():
     ):
         raise RuntimeError("Synthetic benchmark data cannot be used to train the handwriting recognizer.")
 
+    # MathWriting contains many LaTeX commands beyond the built-in algebra
+    # vocabulary. Learn token identities from training labels so they are not
+    # all collapsed into <UNK>. Validation/test labels never add vocabulary.
+    added_tokens = tokenizer.extend_from_texts(sample.get("latex", "") for sample in train_samples)
+    train_token_count = 0
+    train_oov = 0
+    for sample in train_samples:
+        tokens = tokenizer.tokenize(sample.get("latex", ""))
+        train_token_count += len(tokens)
+        train_oov += sum(token not in tokenizer.token2id for token in tokens)
+    logger.info(
+        "Training vocabulary: %d tokens (%d added from training labels); "
+        "training-label OOV rate: %.2f%%",
+        tokenizer.vocab_size,
+        added_tokens,
+        100 * train_oov / max(1, train_token_count),
+    )
+
     # PyTorch Datasets
     train_ds = MathWritingDataset(
         samples=train_samples,
@@ -115,6 +139,19 @@ def main():
         dropout=model_cfg.get("dropout", 0.1),
         max_seq_len=model_cfg.get("max_seq_len", 128),
     )
+
+    if args.init_checkpoint:
+        transferred = MathTrainer.initialize_from_checkpoint(
+            model=model,
+            tokenizer=tokenizer,
+            checkpoint_path=args.init_checkpoint,
+        )
+        logger.info(
+            "Initialized from %s: %d/%d model tensors transferred; matching vocabulary rows copied.",
+            args.init_checkpoint,
+            transferred,
+            len(model.state_dict()),
+        )
 
     trainer = MathTrainer(
         model=model,
