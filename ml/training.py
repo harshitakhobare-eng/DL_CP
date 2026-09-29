@@ -258,10 +258,16 @@ class MathTrainer:
         logger.info(f"Validation Metrics: {metrics}")
         return metrics
 
-    def train(self, epochs: int = 10, save_best_only: bool = True) -> Dict[str, Any]:
+    def train(
+        self,
+        epochs: int = 10,
+        save_best_only: bool = True,
+        early_stopping_patience: Optional[int] = 3,
+    ) -> Dict[str, Any]:
         """Complete training loop across epochs with checkpointing."""
         best_val_loss = float("inf")
         best_em = -1.0
+        epochs_without_improvement = 0
 
         for epoch in range(1, epochs + 1):
             logger.info(f"\n--- Starting Epoch {epoch}/{epochs} ---")
@@ -287,13 +293,23 @@ class MathTrainer:
             if is_best:
                 best_val_loss = metrics["val_loss"]
                 best_em = metrics["exact_match"]
+                epochs_without_improvement = 0
                 self.save_checkpoint("best_model.pt", epoch, metrics)
+            else:
+                epochs_without_improvement += 1
 
             # Always save latest model after each epoch
             self.save_checkpoint("latest_model.pt", epoch, metrics)
 
             if not save_best_only:
                 self.save_checkpoint(f"checkpoint_epoch_{epoch}.pt", epoch, metrics)
+
+            if early_stopping_patience and epochs_without_improvement >= early_stopping_patience:
+                logger.info(
+                    "Early stopping after %d epochs without validation sequence improvement.",
+                    epochs_without_improvement,
+                )
+                break
 
         logger.info("Training complete.")
         return {

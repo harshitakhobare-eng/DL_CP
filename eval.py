@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from typing import Optional
 import yaml
 import torch
 from torch.utils.data import DataLoader
@@ -33,7 +34,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 
-def evaluate_recognition(checkpoint_path: str, test_subset: int = 50, config_path: str = "config.yaml"):
+def evaluate_recognition(checkpoint_path: str, test_subset: int = 50, config_path: str = "config.yaml", cache_dir: Optional[str] = None):
     """Evaluate recognition model on test split."""
     print("\n" + "=" * 60)
     print(" 1. RECOGNITION EVALUATION")
@@ -55,10 +56,14 @@ def evaluate_recognition(checkpoint_path: str, test_subset: int = 50, config_pat
     
     _, _, test_samples = load_math_dataset(
         dataset_name=dataset_cfg.get("hf_dataset_name", "deepcopy/MathWriting-human"),
-        cache_dir=dataset_cfg.get("cache_dir", "data/cache"),
+        cache_dir=cache_dir or dataset_cfg.get("cache_dir", "data/cache"),
         test_subset=test_subset,
         allow_synthetic_fallback=False,
+        equations_only=True,
+        max_seq_len=model_cfg.get("max_seq_len", 128),
     )
+    if not test_samples:
+        raise RuntimeError("No supported equations were found in the held-out test split.")
 
     test_ds = MathWritingDataset(
         samples=test_samples,
@@ -81,6 +86,7 @@ def evaluate_recognition(checkpoint_path: str, test_subset: int = 50, config_pat
     print(f"Token Accuracy:         {metrics['token_acc'] * 100:.2f}%")
     print(f"Exact Match (EM):       {metrics['exact_match'] * 100:.2f}%")
     print(f"Character Error Rate:   {metrics['cer']:.4f}")
+    print(f"Unknown Token Rate:     {metrics['unknown_token_rate'] * 100:.2f}%")
     print(f"Validation Loss:        {metrics['val_loss']:.4f}")
 
 
@@ -183,10 +189,11 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate Math Understanding System")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/best_model.pt", help="Path to checkpoint")
     parser.add_argument("--test-subset", type=int, default=50, help="Test subset count")
+    parser.add_argument("--cache-dir", type=str, default=None, help="Hugging Face dataset cache directory")
     parser.add_argument("--config", type=str, default="config.yaml", help="Path to config.yaml")
     args = parser.parse_args()
 
-    evaluate_recognition(args.checkpoint, args.test_subset, args.config)
+    evaluate_recognition(args.checkpoint, args.test_subset, args.config, args.cache_dir)
     evaluate_mathematical_reasoning()
     evaluate_educational_features()
 

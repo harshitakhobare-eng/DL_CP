@@ -29,7 +29,9 @@ def main():
     parser.add_argument("--lr", type=float, default=None, help="Learning rate")
     parser.add_argument("--train-subset", type=int, default=None, help="Subset size for training")
     parser.add_argument("--val-subset", type=int, default=None, help="Subset size for validation")
+    parser.add_argument("--cache-dir", type=str, default=None, help="Hugging Face dataset cache directory")
     parser.add_argument("--checkpoint-dir", type=str, default=None, help="Checkpoint output directory")
+    parser.add_argument("--early-stopping-patience", type=int, default=3, help="Stop after this many epochs without improved validation sequence quality")
     parser.add_argument(
         "--init-checkpoint",
         type=str,
@@ -68,17 +70,24 @@ def main():
     logger.info(f"Loading dataset: train={train_subset}, val={val_subset}, test={test_subset}...")
     train_samples, val_samples, _ = load_math_dataset(
         dataset_name=dataset_cfg.get("hf_dataset_name", "deepcopy/MathWriting-human"),
-        cache_dir=dataset_cfg.get("cache_dir", "data/cache"),
+        cache_dir=args.cache_dir or dataset_cfg.get("cache_dir", "data/cache"),
         train_subset=train_subset,
         val_subset=val_subset,
         test_subset=test_subset,
         allow_synthetic_fallback=args.allow_synthetic_data,
+        equations_only=True,
+        max_seq_len=model_cfg.get("max_seq_len", 128),
     )
 
     if not args.allow_synthetic_data and any(
         sample.get("data_type") == "synthetic_benchmark" for sample in train_samples
     ):
         raise RuntimeError("Synthetic benchmark data cannot be used to train the handwriting recognizer.")
+    if not train_samples or not val_samples:
+        raise RuntimeError(
+            "The equation filter produced an empty training or validation split. "
+            "Check the dataset labels and equation filter before spending GPU time."
+        )
 
     # MathWriting contains many LaTeX commands beyond the built-in algebra
     # vocabulary. Learn token identities from training labels so they are not
@@ -164,7 +173,7 @@ def main():
     )
 
     logger.info(f"Starting training for {epochs} epochs...")
-    results = trainer.train(epochs=epochs)
+    results = trainer.train(epochs=epochs, early_stopping_patience=args.early_stopping_patience)
     logger.info(f"Training completed! Best val loss: {results['best_val_loss']}, Best exact match: {results['best_exact_match']}")
 
 

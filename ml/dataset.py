@@ -8,6 +8,8 @@ and provides custom DataLoader collate functions.
 from __future__ import annotations
 import logging
 import os
+import random
+import re
 from typing import Dict, List, Optional, Tuple, Any, Union
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
@@ -18,6 +20,62 @@ from ml.tokenizer import LatexTokenizer, PAD_ID
 from ml.preprocessing import preprocess_image, resize_and_pad
 
 logger = logging.getLogger(__name__)
+
+_EQUATION_COMMANDS = {
+    r"\frac", r"\sqrt", r"\cdot", r"\times", r"\left", r"\right",
+}
+_EQUATION_PUNCTUATION = set("{}()+-*/=^.")
+_EQUATION_TOKENIZER = LatexTokenizer()
+
+
+def is_supported_equation(latex: str, max_seq_len: int = 128) -> bool:
+    """Keep short, single-equality algebra samples using supported notation."""
+    if not isinstance(latex, str):
+        return False
+    expression = latex.strip()
+    if expression.count("=") != 1:
+        return False
+
+    tokens = _EQUATION_TOKENIZER.tokenize(expression)
+    if not tokens or len(tokens) + 2 > max_seq_len:
+        return False
+    for token in tokens:
+        if token.startswith("\\"):
+            if token not in _EQUATION_COMMANDS:
+                return False
+        elif token not in _EQUATION_PUNCTUATION and not token.isalnum():
+            return False
+    return True
+
+
+def _prepare_split(samples, limit: Optional[int], seed: int, equations_only: bool, max_seq_len: int):
+    """Filter, shuffle, then limit a Hugging Face split or an in-memory list."""
+    original_count = len(samples)
+    if equations_only:
+        if hasattr(samples, "filter"):
+            samples = samples.filter(
+                lambda latex: is_supported_equation(latex, max_seq_len=max_seq_len),
+                input_columns=["latex"],
+                desc="Filtering supported single-equation samples",
+            )
+        else:
+            samples = [row for row in samples if is_supported_equation(row.get("latex", ""), max_seq_len)]
+
+    filtered_count = len(samples)
+    if hasattr(samples, "shuffle"):
+        samples = samples.shuffle(seed=seed)
+    else:
+        samples = list(samples)
+        random.Random(seed).shuffle(samples)
+
+    count = min(len(samples), limit) if limit else len(samples)
+    samples = samples.select(range(count)) if hasattr(samples, "select") else samples[:count]
+    if equations_only:
+        logger.info(
+            "Equation split seed=%d: %d/%d samples match the filter; using %d.",
+            seed, filtered_count, original_count, len(samples),
+        )
+    return samples
 
 
 class MathWritingDataset(Dataset):
@@ -131,11 +189,13 @@ def load_math_dataset(
     val_subset: Optional[int] = 500,
     test_subset: Optional[int] = 500,
     allow_synthetic_fallback: bool = True,
+    equations_only: bool = False,
+    max_seq_len: int = 128,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Load the MathWriting-human dataset from Hugging Face.
     
     Automatically creates train, validation, and test splits.
-    Supports development subsets.
+    Supports shuffled development subsets and optional equation-domain filtering.
     If HF is offline or inaccessible, provides clear guidance and falls back to synthetic offline data.
     """
     if cache_dir:
@@ -146,11 +206,6 @@ def load_math_dataset(
 
         logger.info(f"Connecting to Hugging Face dataset '{dataset_name}' (cache: {cache_dir})...")
         
-        # Determine subset slices if specified
-        train_split = f"train[:{train_subset}]" if train_subset else "train"
-        val_split = f"validation[:{val_subset}]" if val_subset else "validation"
-        test_split = f"test[:{test_subset}]" if test_subset else "test"
-
         # Attempt to load dataset
         hf_dataset = load_dataset(dataset_name, cache_dir=cache_dir)
         
@@ -158,27 +213,28 @@ def load_math_dataset(
         available_splits = list(hf_dataset.keys())
         logger.info(f"Successfully loaded HF dataset. Available splits: {available_splits}")
 
-        train_ds = hf_dataset["train"]
-        num_train = min(len(train_ds), train_subset) if train_subset else len(train_ds)
-        train_data = train_ds.select(range(num_train)) if hasattr(train_ds, "select") else [train_ds[i] for i in range(num_train)]
-
+        train_source = hf_dataset["train"]
         val_key = "val" if "val" in hf_dataset else ("validation" if "validation" in hf_dataset else None)
         if val_key:
-            val_ds = hf_dataset[val_key]
-            num_val = min(len(val_ds), val_subset) if val_subset else len(val_ds)
-            val_data = val_ds.select(range(num_val)) if hasattr(val_ds, "select") else [val_ds[i] for i in range(num_val)]
+            val_source = hf_dataset[val_key]
         else:
-            split_idx = int(len(train_data) * 0.9)
-            val_data = train_data.select(range(split_idx, len(train_data))) if hasattr(train_data, "select") else train_data[split_idx:]
-            train_data = train_data.select(range(split_idx)) if hasattr(train_data, "select") else train_data[:split_idx]
+            split_idx = int(len(train_source) * 0.9)
+            if hasattr(train_source, "select"):
+                val_source = train_source.select(range(split_idx, len(train_source)))
+                train_source = train_source.select(range(split_idx))
+            else:
+                val_source = train_source[split_idx:]
+                train_source = train_source[:split_idx]
 
         test_key = "test" if "test" in hf_dataset else None
         if test_key:
-            test_ds = hf_dataset[test_key]
-            num_test = min(len(test_ds), test_subset) if test_subset else len(test_ds)
-            test_data = test_ds.select(range(num_test)) if hasattr(test_ds, "select") else [test_ds[i] for i in range(num_test)]
+            test_source = hf_dataset[test_key]
         else:
-            test_data = val_data
+            test_source = val_source
+
+        train_data = _prepare_split(train_source, train_subset, 42, equations_only, max_seq_len)
+        val_data = _prepare_split(val_source, val_subset, 43, equations_only, max_seq_len)
+        test_data = _prepare_split(test_source, test_subset, 44, equations_only, max_seq_len)
 
         logger.info(f"Loaded dataset: {len(train_data)} train, {len(val_data)} val, {len(test_data)} test samples.")
         return train_data, val_data, test_data
@@ -202,10 +258,14 @@ def load_math_dataset(
             "For offline development and immediate testing, generating synthetic benchmark dataset.\n"
             + "=" * 70 + "\n"
         )
-        return create_synthetic_benchmark_dataset(
+        train_data, val_data, test_data = create_synthetic_benchmark_dataset(
             num_train=train_subset or 200,
             num_val=val_subset or 50,
             num_test=test_subset or 50,
+        )
+        return tuple(
+            _prepare_split(split, None, 42 + i, equations_only, max_seq_len)
+            for i, split in enumerate((train_data, val_data, test_data))
         )
 
 
